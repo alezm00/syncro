@@ -11,15 +11,16 @@ Apri `index.html` nel browser (serve internet per three.js, jsPDF e Tailwind da 
 - Controllo collisioni, ingombro del passaruota (sagoma misurata sul modello 3D), porta scorrevole e corridoio minimo (600 mm, ipotesi).
 - Scheda Catalogo: ricerca su tutto il catalogo (`catalog-full.js`), aggiunta alla distinta o posizionamento nel vano.
 
-## File non inclusi (materiale di terzi)
-Il catalogo Syncro, le immagini delle sue pagine e il modello 3D del furgone non sono nel repository.
-Senza di essi il configuratore funziona, ma la scheda Catalogo non mostra le pagine di riferimento e non c'e' la carrozzeria 3D.
-Per rigenerarli in locale, con i tuoi file:
+## Materiale di terzi incluso
+Il repository contiene il catalogo Syncro 26-1 (PDF), le immagini delle sue pagine (`img/`) e il modello 3D del furgone (`Assembly 1.step`, convertito in `transit.glb` / `transit.glb.js`).
+Sono materiale di terzi: il catalogo e' di Syncro System, il modello 3D e' stato scaricato da internet e la sua licenza non e' stata verificata. Verifica di avere i diritti prima di riusarli o ridistribuirli.
+
+Per rigenerare i file derivati:
 ```sh
 # pagine del catalogo come immagini (pagine PDF 24-244)
-mkdir -p img && pdftoppm -f 24 -l 244 -scale-to-x 640 -scale-to-y -1 -jpeg -jpegopt quality=55 Catalogo.pdf img/p
-# (ri)genera i dati del catalogo
-python3 tools/extract_catalog.py Catalogo.pdf
+mkdir -p img && pdftoppm -f 24 -l 244 -scale-to-x 640 -scale-to-y -1 -jpeg -jpegopt quality=55 Catalogo-26-1-ita-ted-vers-15-04-2026.pdf img/p
+# dati del catalogo
+python3 tools/extract_catalog.py Catalogo-26-1-ita-ted-vers-15-04-2026.pdf
 # carrozzeria: STEP -> glb -> transit.glb.js
 npm i occt-import-js @gltf-transform/core
 node --max-old-space-size=6000 tools/step_to_glb.mjs "Assembly 1.step" transit.glb 8

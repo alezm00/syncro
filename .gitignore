@@ -1,9 +1,2 @@
-# materiale di terzi, non ridistribuito: catalogo Syncro, immagini delle sue pagine, modello 3D del furgone
-Catalogo*.pdf
-img/
-*.step
-*.stp
-transit.glb
-transit.glb.js
 Screenshot*
 node_modules/
