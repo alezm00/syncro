@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Configuratore Syncro - Transit Custom</title>
-<style>#view canvas{position:absolute;inset:0}</style>
+<style>#view canvas{position:absolute;inset:0}.hl-mark{outline:2px solid #f59e0b;outline-offset:-1px;background-color:#fffbeb !important}</style>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.4/dist/index.global.js"></script>
 <script src="transit.glb.js"></script>
 <script src="catalog.js"></script>
@@ -30,11 +30,17 @@
   </nav>
   <div class="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-3">
     <section id="tab-mods" class="space-y-3">
+      <div class="rounded-lg border border-sky-200 bg-sky-50 p-2 text-xs">
+        <div class="flex gap-1.5"><select id="preset" class="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"></select><button id="presetgo" class="rounded-md bg-sky-600 px-3 py-1 font-medium text-white hover:bg-sky-700">Carica</button></div>
+        <div id="presetnote" class="mt-1.5 space-y-1 leading-relaxed text-slate-600"></div>
+      </div>
       <div id="list" class="space-y-2"></div>
       <div id="objsbox" hidden><h3 class="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Oggetti nel vano (dal catalogo)</h3><div id="objs" class="space-y-2"></div></div>
     </section>
     <section id="tab-cat" hidden class="space-y-2">
       <input id="q" type="search" placeholder="Cerca codice o descrizione (es. KCU, armadio, baule)" class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+      <div class="rounded-md border border-slate-200 bg-white p-2 text-xs"><p class="mb-1 font-semibold text-slate-500">Attrezzatura personale (misure indicative, non a catalogo)</p>
+        <div class="flex gap-1.5"><select id="toolsel" class="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1"></select><button id="toolgo" class="rounded-md bg-slate-800 px-3 py-1 text-white hover:bg-slate-700">Posiziona nel vano</button></div></div>
       <select id="secsel" class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"></select>
       <div id="secinfo" class="flex items-center gap-2 text-xs text-slate-500"></div>
       <div id="catlist" class="space-y-1"></div>
@@ -66,8 +72,11 @@
   <div class="min-h-0 flex-1 p-2"><img id="lbi" alt="" class="mx-auto h-full max-w-full object-contain"></div>
 </div>
 <div id="view" class="relative min-w-0 overflow-hidden">
+  <div id="tip" hidden class="pointer-events-none absolute z-20 max-w-xs rounded bg-slate-900/90 px-2 py-1 text-xs text-white shadow"></div>
   <div class="absolute left-3 top-3 z-10 flex gap-1 rounded-lg bg-white/90 p-1 shadow">
     <button data-v="iso" class="rounded px-2 py-1 text-xs hover:bg-slate-100">Iso</button><button data-v="top" class="rounded px-2 py-1 text-xs hover:bg-slate-100">Alto</button><button data-v="side" class="rounded px-2 py-1 text-xs hover:bg-slate-100">Lato dx</button><button data-v="rear" class="rounded px-2 py-1 text-xs hover:bg-slate-100">Posteriore</button>
+    <span class="mx-1 my-1 w-px bg-slate-300"></span>
+    <button id="undo" title="Annulla (Ctrl+Z)" class="rounded px-2 py-1 text-xs hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent">&#8630; Annulla</button><button id="redo" title="Ripeti (Ctrl+Maiusc+Z o Ctrl+Y)" class="rounded px-2 py-1 text-xs hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent">Ripeti &#8631;</button>
   </div>
 </div>
 
@@ -247,9 +256,12 @@ const M = { floor: mat(0xffffff, woodTex()), arch: mat(0xffffff, metalTex('#4a50
 M.floor.map.repeat.set(W / 600, 5);
 const glass = new THREE.MeshBasicMaterial({ color: 0x88aacc, transparent: true, opacity: .08, side: THREE.DoubleSide, depthWrite: false });
 const line = c => new THREE.LineBasicMaterial({ color: c });
+let TAG = null; const PICK = []; // TAG: a quale modulo/componente/oggetto appartengono i box creati; PICK: mesh selezionabili col mouse
 const box = (g, [x, y, z], [w, h, d], m) => {
   const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
-  o.position.set(x + w / 2, y + h / 2, z + d / 2); g.add(o); return o;
+  o.position.set(x + w / 2, y + h / 2, z + d / 2); g.add(o);
+  if (TAG) { o.userData.tag = TAG; PICK.push(o); }
+  return o;
 };
 
 // contenitori Euronorm 400x290: girati (290 in profondita) sui ripiani da 310/360
@@ -280,7 +292,7 @@ function drawers(x, y, z, along, across, hh, cells, wi, axis, handleEnd) {
 }
 
 function rebuild() {
-  world.traverse(o => o.geometry?.dispose()); world.clear();
+  world.traverse(o => o.geometry?.dispose()); world.clear(); PICK.length = 0; TAG = null;
   const l = L(), h = H();
   const shell = new THREE.Mesh(new THREE.BoxGeometry(W, h, l), glass);
   shell.position.set(0, h / 2, l / 2); world.add(shell);
@@ -301,8 +313,10 @@ function rebuild() {
     const w = WID[m.wi], d = m.di * 10, left = m.side === 'L';
     const x0 = left ? -W / 2 : W / 2 - d, z0 = m.z + F;
     const sm = sideMat(d, m.hh * 36, i === S.sel ? 1 : hazards(m, fp(m)).length ? 2 : 0);
+    TAG = { m: i };
     for (const zz of [m.z, z0 + w]) box(world, [x0, m.y, zz], [d, m.hh * 36, F], [M.side, M.side, M.side, M.side, sm, sm]);
-    m.items.forEach(it => {
+    m.items.forEach((it, j) => {
+      TAG = { m: i, it: j };
       const y0 = m.y + it.p * 36, hh = it.hi * 36, sp = spec(m, it), o = opts(m, it)?.get(it.o);
       const dep = Math.min(sp.dep, d), ix = left ? x0 + d - dep : x0; // componenti meno profondi del modulo: a filo corridoio
       if (it.t === 's') {
@@ -327,10 +341,13 @@ function rebuild() {
       else box(world, [ix, y0, z0], [dep, hh, w], M.clear); // combinazione non a catalogo: ingombro
     });
   });
-  S.objs.forEach(o => { // oggetti dal catalogo: ingombro con spigoli, rosso se hanno avvisi
+  TAG = null;
+  S.objs.forEach((o, oi) => { // oggetti dal catalogo: ingombro con spigoli, rosso se hanno avvisi
+    TAG = { o: oi };
     const f = fpObj(o), m = box(world, [f.x0, f.y0, f.z0], [f.x1 - f.x0, o.h, o.w], hazards(o, f).length ? M.objBad : M.obj);
     const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), line(0x5b4a2e)); e.position.copy(m.position); world.add(e);
   });
+  TAG = null; applyHl(); scheduleCommit();
   renderBom(); $('modwarn').hidden = !(S.mods.some(m => warns(m)) || S.objs.some(o => warnsObj(o)));
   const ai = aisleMin(0, l);
   $('info').innerHTML = `Interno: ${l} x ${W} x ${h} mm &middot; tra passaruota ${W - 2 * ARCH.in} &middot; <span class="${ai < MIN_AISLE ? 'font-semibold text-red-600' : ''}">corridoio minimo ${ai} mm</span>`;
@@ -375,7 +392,7 @@ const DRAWER_H = [2, 3, 4, 5, 6];
 // catalogo completo (catalog-full.js): codice -> pagina PDF; le pagine sono immagini in img/
 const CA = window.CATALL, PGMAP = new Map();
 for (const it of CA.items) if (!PGMAP.has(it[0])) PGMAP.set(it[0], it[3]);
-const pgBtn = code => PGMAP.has(code) ? `<button data-pg="${PGMAP.get(code)}" title="Apri la pagina del catalogo" class="rounded bg-slate-200 px-1.5 font-sans text-[10px] text-slate-600 hover:bg-slate-300">pag. ${PGMAP.get(code) - 2}</button>` : '';
+const pgBtn = (code, p = PGMAP.get(code)) => p ? `<button data-pg="${p}" title="Apri la pagina del catalogo" class="rounded bg-slate-200 px-1.5 font-sans text-[10px] text-slate-600 hover:bg-slate-300">pag. ${p - 2}</button>` : '';
 const summary = m => `${m.side === 'L' ? 'Sx' : 'Dx'} · ${WID[m.wi]}×${m.hh * 36}×${m.di * 10} · ${m.items.length} comp.`;
 
 function itemRow(m, it, j) {
@@ -471,9 +488,9 @@ list.onclick = e => {
   const c = e.target.closest('.card'); if (!c) return;
   const i = +c.dataset.m, m = S.mods[i], d = e.target.closest('button')?.dataset ?? {};
   if (d.head !== undefined) return select(S.sel === i ? -1 : i);
-  if (d.del !== undefined) { S.mods.splice(i, 1); S.sel = -1; renderList(); rebuild(); return; }
+  if (d.del !== undefined) { setHl(null); S.mods.splice(i, 1); S.sel = -1; renderList(); rebuild(); return; }
   if (d.add !== undefined) { const it = { ...newItem(c.querySelector('[data-addsel]').value), p: 0 }; normItem(m, it); it.p = free(m, it); m.items.push(it); fit(m); S.sel = i; renderList(); }
-  if (d.delitem !== undefined) { m.items.splice(+e.target.closest('.item').dataset.it, 1); fit(m); S.sel = i; renderList(); }
+  if (d.delitem !== undefined) { setHl(null); m.items.splice(+e.target.closest('.item').dataset.it, 1); fit(m); S.sel = i; renderList(); }
   if (e.target.closest('[data-body]')) select(i);
 };
 $('addmod').onclick = () => {
@@ -491,7 +508,7 @@ document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b
 // ---- distinta (pannello e PDF)
 function bomRows() {
   const bom = new Map();
-  const add = (code, desc, n = 1) => { const r = bom.get(code) || { desc, n: 0 }; r.n += n; bom.set(code, r); };
+  const add = (code, desc, n = 1, page) => { const r = bom.get(code) || { desc, n: 0, page }; r.n += n; bom.set(code, r); };
   S.mods.forEach(m => {
     const w = WID[m.wi], d = m.di * 10, k = ksiCode(m);
     add(SET.ksi.has(k.slice(3)) ? k : `da verificare (fianchi ${w}x${m.hh * 36}x${d})`, `Coppia fianchi ${w}x${m.hh * 36}x${d}`);
@@ -500,15 +517,15 @@ function bomRows() {
       if (it.t === 's' && it.c) for (let n = crateGrid(d, w).n; n--;) add('Euronorm (codice da verificare)', 'Contenitore Euronorm 400x290x170');
     });
   });
-  S.objs.forEach(o => add(o.code, `${o.desc} - nel vano ${o.w}x${o.h}x${o.d}`));
-  S.extra.forEach(x => add(x.code, x.desc, x.n));
+  S.objs.forEach(o => { if (!o.custom) add(o.code, `${o.desc} - nel vano ${o.w}x${o.h}x${o.d}`, 1, o.page); });
+  S.extra.forEach(x => add(x.code, x.desc, x.n, x.page));
   return [...bom].map(([code, r]) => ({ code, ...r }));
 }
 function renderBom() {
   const rows = bomRows();
   $('bomn').textContent = rows.reduce((a, r) => a + r.n, 0);
   $('bom').innerHTML = rows.length ? `<table class="w-full text-left text-xs"><thead class="text-[11px] uppercase text-slate-400"><tr><th class="w-8 pb-1">Q.ta</th><th class="pb-1">Codice / descrizione</th></tr></thead><tbody>${rows.map(r =>
-    `<tr class="border-t border-slate-200 align-top"><td class="py-1.5 font-semibold">${r.n}</td><td class="py-1.5"><span class="font-mono ${r.code.includes('verificare') ? 'text-amber-700' : 'text-slate-800'}">${r.code}</span> ${pgBtn(r.code)}<br><span class="text-slate-500">${r.desc}</span></td></tr>`).join('')}</tbody></table>`
+    `<tr class="border-t border-slate-200 align-top"><td class="py-1.5 font-semibold">${r.n}</td><td class="py-1.5"><span class="font-mono ${r.code.includes('verificare') ? 'text-amber-700' : 'text-slate-800'}">${r.code}</span> ${pgBtn(r.code, r.page)}<br><span class="text-slate-500">${r.desc}</span></td></tr>`).join('')}</tbody></table>`
     : '<p class="text-slate-500">Nessun componente.</p>';
 }
 
@@ -517,7 +534,7 @@ const objsEl = $('objs');
 const objCard = (o, i) => {
   const w = warnsObj(o), n = (k, v) => `<input type="number" data-k="${k}" value="${v}" class="${IN}">`;
   return `<div class="obj space-y-1.5 rounded-lg border border-slate-200 bg-white p-2" data-o="${i}">
-    <div class="flex items-start gap-2"><div class="min-w-0 flex-1"><p class="font-mono text-xs font-semibold">${o.code} ${pgBtn(o.code)}</p><p class="truncate text-xs text-slate-500" title="${o.desc}">${o.desc}</p></div>
+    <div class="flex items-start gap-2"><div class="min-w-0 flex-1"><p class="font-mono text-xs font-semibold">${o.custom ? 'Attrezzatura (non a catalogo)' : o.code} ${o.custom ? '' : pgBtn(o.code, o.page)}</p><p class="truncate text-xs text-slate-500" title="${o.desc}">${o.desc}</p></div>
       <button data-delobj title="Rimuovi" class="rounded px-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">&#10005;</button></div>
     <div class="grid grid-cols-3 gap-2">
       ${field('Lato', sel('side', ['L', 'R', 'C'], o.side, v => ({ L: 'Sinistra', R: 'Destra', C: 'Centro' })[v]))}
@@ -539,7 +556,7 @@ objsEl.onchange = e => { // riallinea i campi ai valori corretti
   const c = e.target.closest('.obj'), o = S.objs[+c.dataset.o];
   c.querySelectorAll('input[type=number]').forEach(i => i.value = o[i.dataset.k]);
 };
-objsEl.onclick = e => { const b = e.target.closest('[data-delobj]'); if (b) { S.objs.splice(+b.closest('.obj').dataset.o, 1); renderObjs(); rebuild(); } };
+objsEl.onclick = e => { const b = e.target.closest('[data-delobj]'); if (b) { setHl(null); S.objs.splice(+b.closest('.obj').dataset.o, 1); renderObjs(); rebuild(); } };
 
 // ---- scheda Catalogo: ricerca su tutto il catalogo, riferimenti pagina, aggiunta alla distinta o al vano
 const imgSrc = p => `img/p-${String(p).padStart(3, '0')}.jpg`;
@@ -575,7 +592,7 @@ $('tab-cat').onclick = e => {
 // articoli extra (solo in distinta)
 function renderExtras() {
   $('extras').innerHTML = S.extra.length ? `<h3 class="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Articoli aggiunti dal catalogo</h3><div class="space-y-1">${S.extra.map((x, i) => `
-    <div class="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs" data-x="${i}"><div class="min-w-0 flex-1"><span class="font-mono font-semibold">${x.code}</span> ${pgBtn(x.code)}<p class="truncate text-slate-500">${x.desc}</p></div>
+    <div class="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs" data-x="${i}"><div class="min-w-0 flex-1"><span class="font-mono font-semibold">${x.code}</span> ${pgBtn(x.code, x.page)}<p class="truncate text-slate-500">${x.desc}</p></div>
       <input type="number" min="1" data-k="n" value="${x.n}" class="w-14 rounded border border-slate-300 px-1 py-0.5"><button data-delx title="Rimuovi" class="px-1 text-slate-400 hover:text-red-600">&#10005;</button></div>`).join('')}</div>` : '';
 }
 $('extras').oninput = e => { const x = S.extra[+e.target.closest('[data-x]').dataset.x]; x.n = Math.max(1, Math.round(+e.target.value) || 1); rebuild(); };
@@ -593,6 +610,111 @@ $('lbx').onclick = () => $('lb').hidden = true;
 $('lbprev').onclick = () => openPage(lbp - 1);
 $('lbnext').onclick = () => openPage(lbp + 1);
 document.addEventListener('keydown', e => { if ($('lb').hidden) return; if (e.key === 'Escape') $('lb').hidden = true; if (e.key === 'ArrowLeft') openPage(lbp - 1); if (e.key === 'ArrowRight') openPage(lbp + 1); });
+
+// ---- attrezzatura personale (oggetti non a catalogo, misure indicative: larghezza lungo z, altezza, profondita)
+const TOOLS = [
+  ['Bombola refrigerante 11 kg (diametro 230)', 230, 650, 230], ['Recuperatore di refrigerante', 380, 360, 300], ['Pompa del vuoto', 350, 200, 250],
+  ['Avvolgicavo / bobina cavo', 350, 300, 350], ['Valigia attrezzi grande', 500, 200, 400], ['Altro (modifica le misure)', 400, 300, 300]];
+$('toolsel').innerHTML = TOOLS.map((t, i) => `<option value="${i}">${t[0]}</option>`).join('');
+$('toolgo').onclick = () => {
+  const [desc, w, h, d] = TOOLS[+$('toolsel').value], o = { custom: true, code: 'ATTREZZATURA', desc, side: 'L', z: 0, y: 0, w, h, d };
+  fitObj(o); S.objs.push(o); renderObjs(); rebuild();
+};
+
+// ---- modelli di allestimento: configurazioni complete caricabili con un clic (poi modificabili)
+const PRESETS = {"manutentore": {"name": "Manutentore: caldaie, climatizzatori, impianti elettrici (L1)", "len": "L1", "note": ["<b>Sinistra, colonna anteriore</b> (0-1022 mm dalla paratia, da terra): ricambi caldaie in basso perche pesanti, raccorderia, minuteria e componenti elettrici in cassetti trasparenti; si raggiunge dalla porta scorrevole. Sopra il passaruota (350 mm da terra) un secondo modulo per materiale clima ed elettrico.", "<b>Destra</b>: i primi 1130 mm restano liberi (porta scorrevole); modulo sospeso sopra il passaruota con cassettiere e vasche per il materiale elettrico.", "<b>Retro</b>: a sinistra il recuperatore di refrigerante, a destra due bombole (misure indicative: correggile). Fissale con cinghie su rotaia e tieni a portata il porta-estintore. Le bombole di refrigeranti infiammabili (es. R32) vanno trasportate in piedi, ancorate e con ventilazione: verifica le norme di trasporto (ADR) e il carico utile.", "<b>Non incluso</b>: scala e tubi sul tetto (servono barre portapacchi/portascale per il Custom, catalogo pag. 226-235: codici da verificare col rivenditore). Un posto da 36 mm in cima al primo modulo e' riservato al portamorsa XVS40136."], "mods": [{"side": "L", "z": 0, "y": 0, "wi": 4, "di": 36, "hh": 34, "items": [{"t": "v", "a": "a", "p": 0, "o": 4}, {"t": "v", "a": "a", "p": 5, "o": 8}, {"t": "f", "a": "e", "p": 10, "o": 8}, {"t": "x", "a": 7, "b": 26, "p": 19, "o": 8}, {"t": "v", "a": "b", "p": 26, "o": 4}, {"t": "s", "p": 28, "c": 1}]}, {"side": "L", "z": 1030, "y": 350, "wi": 4, "di": 36, "hh": 24, "items": [{"t": "f", "a": "a", "p": 0}, {"t": "v", "a": "a", "p": 7, "o": 4}, {"t": "s", "p": 12, "c": 1}, {"t": "v", "a": "a", "p": 17, "o": 8}, {"t": "v", "a": "b", "p": 22, "o": 2}]}, {"side": "R", "z": 1140, "y": 350, "wi": 3, "di": 36, "hh": 24, "items": [{"t": "x", "a": 7, "b": 26, "p": 0, "o": 4}, {"t": "v", "a": "a", "p": 7, "o": 6}, {"t": "v", "a": "a", "p": 12, "o": 4}, {"t": "f", "a": "a", "p": 17}]}], "objs": [{"custom": true, "code": "ATTREZZATURA", "desc": "Recuperatore di refrigerante", "side": "L", "z": 2090, "y": 0, "w": 380, "h": 360, "d": 300}, {"custom": true, "code": "ATTREZZATURA", "desc": "Bombola refrigerante 11 kg (diametro 230)", "side": "R", "z": 2090, "y": 0, "w": 230, "h": 650, "d": 230}, {"custom": true, "code": "ATTREZZATURA", "desc": "Bombola refrigerante 11 kg (diametro 230)", "side": "R", "z": 2335, "y": 0, "w": 230, "h": 650, "d": 230}], "extra": [{"code": "PT-EST/C", "desc": "Porta estintore universale con omega di fissaggio", "page": 184, "n": 1}, {"code": "ROTAL1250", "desc": "Rotaia in alluminio airline per cinghie, L. 1250 mm", "page": 176, "n": 2}, {"code": "CIN/25A", "desc": "Coppia cinghie h. 25 mm con ganci per rotaia fresata (per le bombole)", "page": 178, "n": 2}, {"code": "XVS40136", "desc": "Portamorsa a sfilare 1014x36x360 (nel posto riservato in cima al modulo 1)", "page": 153, "n": 1}, {"code": "KCB00001M900", "desc": "Barra in alluminio L. 900 con molle porta utensili h. 49", "page": 174, "n": 1}, {"code": "GNC-UNI", "desc": "Gancio in ferro regolabile P 140-190 mm", "page": 184, "n": 2}, {"code": "AGA00004", "desc": "Gancio per piccoli oggetti e cinghia a sgancio rapido", "page": 184, "n": 4}, {"code": "PC250E", "desc": "Porta rotolo di carta in metallo con rotolo da 230 mm", "page": 209, "n": 1}, {"code": "INV1000.OS", "desc": "Inverter onda sinusoidale pura 1.000 W 12 V (utensili e pompa del vuoto)", "page": 194, "n": 1}, {"code": "FAOR-LED", "desc": "Faro orientabile a led con base magnetica", "page": 201, "n": 1}]}};
+$('preset').innerHTML = '<option value="">Modelli di allestimento...</option>' + Object.entries(PRESETS).map(([k, p]) => `<option value="${k}">${p.name}</option>`).join('');
+$('preset').onchange = e => { const p = PRESETS[e.target.value]; $('presetnote').innerHTML = p ? p.note.map(t => `<p>${t}</p>`).join('') : ''; };
+$('presetgo').onclick = () => {
+  const p = PRESETS[$('preset').value]; if (!p) return;
+  if ((S.mods.length || S.objs.length || S.extra.length) && !confirm('Sostituire la configurazione attuale con il modello?')) return;
+  const c = JSON.parse(JSON.stringify(p));
+  S.len = c.len; S.mods = c.mods; S.objs = c.objs; S.extra = c.extra; S.sel = -1; $('len').value = S.len;
+  S.mods.forEach(fit); S.objs.forEach(fitObj); renderList(); renderObjs(); renderExtras(); rebuild(); placeVan(); setView('iso'); showTab('mods');
+};
+
+// ---- evidenziazione al passaggio del mouse, nei due sensi: pannello -> modello 3D e modello 3D -> pannello
+// HL = { m } modulo | { m, it } componente | { o } oggetto; le mesh hanno userData.tag con la stessa forma (vedi box())
+let HL = null;
+const HLMAT = new THREE.MeshLambertMaterial({ color: 0xffc233, emissive: 0x7a4a00, transparent: true, opacity: .92 });
+function applyHl() {
+  for (const o of PICK) {
+    const t = o.userData.tag, on = HL && (HL.o !== undefined ? t.o === HL.o : t.m === HL.m && (HL.it === undefined || t.it === HL.it));
+    if (on) { o.userData.mat0 ??= o.material; o.material = HLMAT; } else if (o.userData.mat0) o.material = o.userData.mat0;
+  }
+}
+function markDom(scroll) { // evidenzia la voce corrispondente nel pannello (scheda del modulo, riga del componente o oggetto)
+  document.querySelectorAll('.hl-mark').forEach(el => el.classList.remove('hl-mark'));
+  if (!HL) return;
+  let el = HL.o !== undefined ? objsEl.children[HL.o] : list.children[HL.m];
+  if (el && HL.it !== undefined) { const row = el.querySelectorAll('.item')[HL.it]; if (row && !row.closest('[data-body]').hidden) el = row; }
+  if (!el) return;
+  el.classList.add('hl-mark'); if (scroll) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+function setHl(t, scroll = false) {
+  if (JSON.stringify(t) === JSON.stringify(HL)) return;
+  HL = t; applyHl(); markDom(scroll);
+}
+// pannello -> modello
+list.onmouseover = e => {
+  const c = e.target.closest('.card'); if (!c) return;
+  const r = e.target.closest('.item'); setHl(r ? { m: +c.dataset.m, it: +r.dataset.it } : { m: +c.dataset.m });
+};
+list.onmouseleave = () => setHl(null);
+objsEl.onmouseover = e => { const c = e.target.closest('.obj'); if (c) setHl({ o: +c.dataset.o }); };
+objsEl.onmouseleave = () => setHl(null);
+// modello -> pannello (con etichetta vicino al cursore); clic = apre il modulo e porta alla voce
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), tip = $('tip'), cvs = renderer.domElement;
+let hoverTag = null, downAt = null;
+function tipText(t) {
+  if (t.o !== undefined) { const o = S.objs[t.o]; return o.custom ? o.desc : `${o.code} - ${o.desc}`; }
+  const m = S.mods[t.m]; if (t.it === undefined) return `Modulo ${t.m + 1} · ${summary(m)}`;
+  const it = m.items[t.it]; return `Modulo ${t.m + 1} · ${TYPES[it.t][0]} · ${spec(m, it).code ?? 'non a catalogo'}`;
+}
+cvs.addEventListener('pointermove', e => {
+  if (e.buttons) { hoverTag = null; tip.hidden = true; return setHl(null); } // trascinando orbita la vista
+  const r = cvs.getBoundingClientRect();
+  ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  hoverTag = ray.intersectObjects(PICK, false)[0]?.object.userData.tag ?? null;
+  setHl(hoverTag, true);
+  tip.hidden = !hoverTag;
+  if (hoverTag) { tip.textContent = tipText(hoverTag); tip.style.left = `${e.clientX - r.left + 14}px`; tip.style.top = `${e.clientY - r.top + 14}px`; }
+});
+cvs.addEventListener('pointerleave', () => { hoverTag = null; tip.hidden = true; setHl(null); });
+cvs.addEventListener('pointerdown', e => downAt = [e.clientX, e.clientY]);
+cvs.addEventListener('pointerup', e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4 || !hoverTag) return;
+  if (hoverTag.m !== undefined) { showTab('mods'); if (S.sel !== hoverTag.m) select(hoverTag.m); } else showTab('mods');
+  markDom(true);
+});
+
+// ---- annulla / ripeti: istantanee dello stato (len, moduli, oggetti, extra); le modifiche ravvicinate (es. digitare un numero) valgono una voce sola
+const snap = () => JSON.stringify({ len: S.len, mods: S.mods, objs: S.objs, extra: S.extra });
+let hist = [], hi = -1, histTimer = 0;
+function updUndo() { $('undo').disabled = hi <= 0; $('redo').disabled = hi >= hist.length - 1; }
+function commit() {
+  clearTimeout(histTimer); histTimer = 0;
+  const s = snap(); if (s === hist[hi]) return;
+  hist = hist.slice(0, hi + 1); hist.push(s); if (hist.length > 100) hist.shift();
+  hi = hist.length - 1; updUndo();
+}
+function scheduleCommit() { clearTimeout(histTimer); histTimer = setTimeout(commit, 400); }
+function restore(i) {
+  hi = i; const c = JSON.parse(hist[hi]);
+  S.len = c.len; S.mods = c.mods; S.objs = c.objs; S.extra = c.extra; if (S.sel >= S.mods.length) S.sel = -1;
+  setHl(null); $('len').value = S.len; S.mods.forEach(fit); S.objs.forEach(fitObj);
+  renderList(); renderObjs(); renderExtras(); rebuild(); placeVan();
+  hist[hi] = snap(); clearTimeout(histTimer); histTimer = 0; updUndo(); // fit puo' normalizzare: la voce resta quella ripristinata
+}
+function undo() { if (histTimer) commit(); if (hi > 0) restore(hi - 1); }
+function redo() { if (histTimer) commit(); if (hi < hist.length - 1) restore(hi + 1); }
+$('undo').onclick = undo; $('redo').onclick = redo;
+document.addEventListener('keydown', e => { // nel campo di ricerca resta l'annulla nativo del testo
+  if (!$('lb').hidden || !(e.ctrlKey || e.metaKey) || e.target.id === 'q') return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); } else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); }
+});
 
 // ---- PDF
 $('pdf').onclick = () => {
@@ -614,7 +736,7 @@ $('pdf').onclick = () => {
   const row = s => { if (y > 282) { doc.addPage(); y = 20; } doc.text(s, 15, y); y += 6; };
   doc.setFont(undefined, 'bold'); row('Moduli'); doc.setFont(undefined, 'normal');
   S.mods.forEach((m, i) => row(`${i + 1}. ${m.side === 'L' ? 'Sx' : 'Dx'} | da paratia ${m.z} | quota ${m.y} | ${WID[m.wi]}x${m.hh * 36}x${m.di * 10} | ${m.items.length} componenti`));
-  S.objs.forEach((o, i) => row(`Oggetto ${i + 1}: ${o.code} | ${o.side === 'L' ? 'Sx' : o.side === 'R' ? 'Dx' : 'centro'} | da paratia ${o.z} | quota ${o.y} | ${o.w}x${o.h}x${o.d}`));
+  S.objs.forEach((o, i) => row(`Oggetto ${i + 1}: ${o.custom ? o.desc : o.code} | ${o.side === 'L' ? 'Sx' : o.side === 'R' ? 'Dx' : 'centro'} | da paratia ${o.z} | quota ${o.y} | ${o.w}x${o.h}x${o.d}`));
   y += 2; doc.setFont(undefined, 'bold'); row('Distinta (codici catalogo 26-1)'); doc.setFont(undefined, 'normal');
   bomRows().forEach(r => row(`${r.n} x ${r.code} - ${r.desc}`));
   y += 2; doc.setFontSize(8);
@@ -625,6 +747,7 @@ $('pdf').onclick = () => {
 S.sel = -1;
 $('len').value = S.len; $('hgt').value = S.hgt;
 S.mods.forEach(fit); S.objs.forEach(fitObj); renderList(); renderObjs(); renderExtras(); renderCat(); rebuild(); setView('iso'); showTab('mods');
+hist = [snap()]; hi = 0; updUndo();
 </script>
 </body>
 </html>
