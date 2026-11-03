@@ -269,10 +269,11 @@ const crateGrid = (d, w) => { const a = d >= 410 ? 400 : 290, b = d >= 410 ? 290
 const CRATE_H = 170;
 
 // vasca scaffale: fondo, bordi e divisori in alluminio
-function tray(x, y, z, dep, w, hh, n) {
+// parete alta contro la fiancata del furgone, bordo basso lato corridoio, lati aperti (chiusi dai fianchi del modulo): come nelle foto del catalogo
+function tray(x, y, z, dep, w, hh, n, left) {
+  const lip = hh <= 72 ? 36 : 72, xb = left ? x : x + dep - 3, xf = left ? x + dep - 3 : x;
   box(world, [x, y, z], [dep, 4, w], M.shelf);
-  for (const xx of [x, x + dep - 3]) box(world, [xx, y, z], [3, hh, w], M.shelf);
-  for (const zz of [z, z + w - 3]) box(world, [x, y, zz], [dep, hh, 3], M.shelf);
+  box(world, [xb, y, z], [3, hh, w], M.shelf); box(world, [xf, y, z], [3, lip, w], M.shelf);
   for (let k = 1; k <= n; k++) box(world, [x, y, z + k * w / (n + 1) - 1.5], [dep, Math.min(hh, 140), 3], M.side);
 }
 // cassettiera MultiBox: piani sopra/sotto e cassetti trasparenti; cells = larghezze in mezze unita' (1 stretto, 2 largo) riempite a righe.
@@ -334,7 +335,7 @@ function rebuild() {
         const hz = Math.min(200, w - 40);
         box(world, [x0, y0 + 4, z0], [d, hh - 8, w], M.drawer);
         box(world, [left ? x0 + d : x0 - 12, y0 + hh / 2 - 7, z0 + (w - hz) / 2], [12, 14, hz], M.handle);
-      } else if (it.t === 'v') tray(ix, y0, z0, dep, w, hh, o?.divs ?? 0);
+      } else if (it.t === 'v') tray(ix, y0, z0, dep, w, hh, o?.divs ?? 0, left);
       else if (it.t === 'c') box(world, [left ? x0 + d - 4 : x0, y0, z0], [4, hh, w], M.shelf); // pannello a filo corridoio
       else if (it.t === 'l') { if (o) drawers(ix, y0, it.e === 'r' ? z0 + w + F : m.z - LAT.th, dep, LAT.th, hh, o.cells, 1, 'x', it.e === 'r'); else box(world, [ix, y0, m.z - LAT.th], [dep, hh, LAT.th], M.clear); }
       else if (o) drawers(ix, y0, z0, w, dep, hh, o.cells, m.wi, 'z', left);
