@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Configuratore Syncro - Transit Custom</title>
+<style>#view canvas{position:absolute;inset:0}</style>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.4/dist/index.global.js"></script>
+<script src="transit.glb.js"></script>
+<script src="catalog.js"></script>
+<script src="catalog-full.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body class="grid h-screen grid-cols-[430px_1fr] bg-slate-100 font-sans text-sm text-slate-800">
+<aside class="flex min-h-0 flex-col border-r border-slate-200 bg-white">
+  <header class="border-b border-slate-200 px-4 py-3">
+    <h1 class="text-base font-semibold">Syncro &middot; Ford Transit Custom MK1.5 (2023)</h1>
+    <p id="info" class="text-xs text-slate-500"></p>
+  </header>
+  <nav class="flex border-b border-slate-200 text-sm font-medium">
+    <button data-tab="mods" class="flex-1 border-b-2 border-transparent px-3 py-2 text-slate-500 hover:text-slate-800 aria-selected:border-sky-600 aria-selected:text-sky-700">Moduli <span id="modwarn" hidden class="ml-1 rounded-full bg-red-100 px-1.5 text-xs font-bold text-red-700">!</span></button>
+    <button data-tab="cat" class="flex-1 border-b-2 border-transparent px-3 py-2 text-slate-500 hover:text-slate-800 aria-selected:border-sky-600 aria-selected:text-sky-700">Catalogo</button>
+    <button data-tab="bom" class="flex-1 border-b-2 border-transparent px-3 py-2 text-slate-500 hover:text-slate-800 aria-selected:border-sky-600 aria-selected:text-sky-700">Distinta <span id="bomn" class="ml-1 rounded-full bg-slate-100 px-1.5 text-xs text-slate-600">0</span></button>
+    <button data-tab="veh" class="flex-1 border-b-2 border-transparent px-3 py-2 text-slate-500 hover:text-slate-800 aria-selected:border-sky-600 aria-selected:text-sky-700">Veicolo</button>
+  </nav>
+  <div class="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-3">
+    <section id="tab-mods" class="space-y-3">
+      <div id="list" class="space-y-2"></div>
+      <div id="objsbox" hidden><h3 class="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Oggetti nel vano (dal catalogo)</h3><div id="objs" class="space-y-2"></div></div>
+    </section>
+    <section id="tab-cat" hidden class="space-y-2">
+      <input id="q" type="search" placeholder="Cerca codice o descrizione (es. KCU, armadio, baule)" class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+      <select id="secsel" class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"></select>
+      <div id="secinfo" class="flex items-center gap-2 text-xs text-slate-500"></div>
+      <div id="catlist" class="space-y-1"></div>
+    </section>
+    <section id="tab-bom" hidden class="space-y-3"><div id="extras"></div><div id="bom"></div></section>
+    <section id="tab-veh" hidden class="space-y-3">
+      <div class="grid grid-cols-2 gap-2">
+        <label><span class="mb-0.5 block text-[11px] font-medium text-slate-500">Passo</span>
+          <select id="len" class="w-full rounded-md border border-slate-300 bg-white px-2 py-1"><option value="L1">L1 - 2602 mm</option><option value="L2">L2 - 3002 mm</option></select></label>
+        <label><span class="mb-0.5 block text-[11px] font-medium text-slate-500">Altezza</span>
+          <select id="hgt" class="w-full rounded-md border border-slate-300 bg-white px-2 py-1"><option value="H1">H1 - 1267 mm</option></select></label>
+      </div>
+      <label class="flex items-center gap-2"><input type="checkbox" id="body" checked>Mostra carrozzeria</label>
+      <div class="space-y-2 text-xs leading-relaxed text-slate-600">
+        <p>Linea blu = porta scorrevole (lato destro), grigio scuro = passaruota. Misure da schede tecniche Ford 2023 (fonti discordanti): verificale col metro. Pianale, passaruota e altezza utile sono ricavati dal modello 3D (<code>Assembly 1.step</code>, in <code>transit.glb.js</code>), che &egrave; un L1: con L2 viene solo traslato.</p>
+        <p>Catalogo Syncro 26-1. Un modulo = coppia di fianchi (KSI) con dentro, a passi di 36 mm: ripiani aperti (XOS), cassetti frontali (KDW), vasche scaffale (XDS/KDS/KCP/KHS), cassettiere MultiBox estraibili (KDU...KD) e ribaltabili (KDU...KFD), pannelli di chiusura (XCP/XSP). Le cassettiere laterali (KDU1...) si agganciano al fianco anteriore o posteriore del modulo.</p>
+        <p>Scheda Catalogo: ricerca su tutto il catalogo (codici estratti dal PDF, indicativi) con pagina di riferimento (immagini in <code>img/</code>). &Egrave; possibile aggiungere un articolo alla distinta o, se ha le misure, posizionarlo nel vano: entra nei controlli di collisione e corridoio (minimo 600 mm, ipotesi modificabile). Solo i componenti dei moduli (fianchi, ripiani, cassetti, vasche, cassettiere, pannelli) hanno 3D dettagliato e codici verificati; gli altri articoli sono scatole o righe di distinta generiche. Texture e forme 3D sono illustrative.</p>
+      </div>
+    </section>
+  </div>
+  <footer class="flex gap-2 border-t border-slate-200 bg-white p-3">
+    <button id="addmod" class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 font-medium hover:bg-slate-50">+ Modulo</button>
+    <button id="pdf" class="flex-1 rounded-md bg-sky-600 px-3 py-2 font-medium text-white hover:bg-sky-700">Esporta PDF</button>
+  </footer>
+</aside>
+<div id="lb" hidden class="fixed inset-0 z-50 flex flex-col bg-black/85">
+  <div class="flex items-center gap-2 p-2 text-sm text-white"><span id="lbt" class="min-w-0 flex-1 truncate"></span>
+    <button id="lbprev" class="rounded bg-white/15 px-3 py-1 hover:bg-white/25">&#9664;</button><button id="lbnext" class="rounded bg-white/15 px-3 py-1 hover:bg-white/25">&#9654;</button><button id="lbx" class="rounded bg-white/15 px-3 py-1 hover:bg-white/25">&#10005;</button></div>
+  <div class="min-h-0 flex-1 p-2"><img id="lbi" alt="" class="mx-auto h-full max-w-full object-contain"></div>
+</div>
+<div id="view" class="relative min-w-0 overflow-hidden">
+  <div class="absolute left-3 top-3 z-10 flex gap-1 rounded-lg bg-white/90 p-1 shadow">
+    <button data-v="iso" class="rounded px-2 py-1 text-xs hover:bg-slate-100">Iso</button><button data-v="top" class="rounded px-2 py-1 text-xs hover:bg-slate-100">Alto</button><button data-v="side" class="rounded px-2 py-1 text-xs hover:bg-slate-100">Lato dx</button><button data-v="rear" class="rounded px-2 py-1 text-xs hover:bg-slate-100">Posteriore</button>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// ---- furgone (mm, indicativo). z=0 paratia, z=L portiere posteriori, +x = lato destro (porta scorrevole)
+// fonti: schede tecniche Ford/Parkers/VansDirect (2602, 3002, 1777, 1392, 1267, porta 1030x1301)
+const LEN = { L1: 2602, L2: 3002 }, HGT = { H1: 1267 }, W = 1777;
+// passaruota (con coprigomma del kit pianale) misurati sul modello 3D, pianale z=0: parete verticale a 207 mm dalla fiancata, sagoma in pts = [distanza dall'inizio, altezza]
+// parte alta piatta 340 mm da 200 a 680 (spigoli arrotondati), gradini bassi 130-183 mm alle estremita'; la sagoma e' simmetrica. Parte da 1200 mm dalla paratia in L1; in L2 segue l'asse posteriore (+400).
+// Il punto (105,130) -> (140,317) e' interpolato: nel modello la parete tra il gradino e la parte alta ha pochi vertici.
+const ARCH = { z1: 1200, l: 880, in: 207 };
+const ARCH_HALF = [[0, 175], [20, 183], [40, 169], [60, 148], [80, 130], [105, 130], [140, 317], [160, 331], [180, 338], [200, 340]];
+ARCH.pts = [[0, 0], ...ARCH_HALF, ...ARCH_HALF.slice().reverse().map(([z, h]) => [ARCH.l - z, h]), [ARCH.l, 0]];
+const archZ = () => ARCH.z1 + L() - LEN.L1;
+const DOOR = { z: 100, l: 1030, h: 1301 };
+const VIEWS = { iso: [1, .9, 1.6], top: [0, 1, .001], side: [1, 0, 0], rear: [0, .3, 1] };
+
+// ---- catalogo Syncro 26-1: passo altezza 36 mm. I codici validi sono in catalog.js (estratti dal PDF)
+const WID = { 2: 507, 3: 760, 4: 1014, 5: 1268, 6: 1521 }; // indice larghezza -> mm (multipli di 253,5)
+const DEPTHS = [21, 26, 31, 36, 41];                        // codice profondita -> x10 mm
+const SET = Object.fromEntries(Object.entries(CAT).map(([k, v]) => [k, new Set(v)]));
+const p2 = n => String(n).padStart(2, '0');
+// vasche scaffale: [etichetta, passi da 36, famiglie di codice]
+const VAS = { b: ['bassa 72', 2, ['XDS', 'KDS']], a: ['alta 180', 5, ['XDS', 'KDS']], p: ['alta 180 con pannello posteriore', 5, ['KCP']], t: ['terminale 72 con fianchi', 2, ['KHS']] };
+// cassettiere ribaltabili: [etichetta, passi da 36, codice profondita]
+const FV = { a: ['H252 una fila', 7, 16], b: ['H324 una fila', 9, 21], c: ['H468 due file', 13, 16], d: ['H180 stretti/larghi', 5, 11], e: ['H324 due file stretti/larghi', 9, 11] };
+// pannelli di chiusura: [etichetta, passi da 36, famiglia]
+const PAN = { a: ['108 mm (XCP)', 3, 'XCP'], b: ['144 mm (XCP)', 4, 'XCP'], c: ['180 mm (XCP)', 5, 'XCP'], d: ['108 mm con aggancio per vasche (XSP)', 3, 'XSP'] };
+const LAT = { w: 263, th: 110 }; // cassettiere laterali KDU1...: 263 di larghezza, 110 di spessore sul fianco
+const TYPES = { s: ['Ripiano aperto', 'Ripiano'], d: ['Cassetto frontale', 'Cassetto'], v: ['Vasca scaffale', 'Vasca'], x: ['Cassettiera estraibile', 'Estraibile'], f: ['Cassettiera ribaltabile', 'Ribaltabile'], l: ['Cassettiera laterale', 'Laterale'], c: ['Pannello di chiusura', 'Pannello'] };
+const F = 4; // spessore indicativo fianco, solo per il disegno
+
+const $ = id => document.getElementById(id);
+let S = { len: 'L1', hgt: 'H1', mods: [], objs: [], extra: [], sel: -1 };
+try { Object.assign(S, JSON.parse(localStorage.getItem('syncro-cfg2'))); } catch {}
+if (!LEN[S.len]) S.len = 'L1';
+S.hgt = 'H1';
+const L = () => LEN[S.len], H = () => HGT[S.hgt];
+
+const slots = it => it.hi;
+const cl = (v, a, b) => Math.min(Math.max(+v || 0, a), Math.max(a, b));
+const grp = it => it.t === 'l' ? 'l' + it.e : 'm'; // le laterali stanno fuori dai fianchi: non si sovrappongono ai componenti interni
+const ext = (m, e) => m.items.some(it => it.t === 'l' && it.e === e) ? LAT.th : 0; // ingombro aggiunto in testa (f) / in coda (r) al modulo
+const free = (m, it) => { for (let p = 0; p + it.hi <= m.hh; p++) if (!m.items.some(o => o !== it && grp(o) === grp(it) && p < o.p + slots(o) && o.p < p + it.hi)) return p; return 0; };
+const ksiCode = m => `KSI${m.wi}${p2(m.hh)}${m.di}`;
+const hhOpts = m => [...new Set(CAT.ksi.filter(c => c[0] == m.wi && +c.slice(3, 5) === m.di).map(c => +c.slice(1, 3)))].filter(v => v * 36 <= H()).sort((a, b) => a - b);
+const newItem = t => ({ s: { t, hi: 1 }, d: { t, hi: 3 }, v: { t, a: 'b' }, x: { t, a: 4, b: 21 }, f: { t, a: 'a' }, l: { t, a: 9, e: 'r' }, c: { t, a: 'a' } })[t];
+
+// opzioni valide a catalogo per larghezza/profondita del modulo: Map(chiave -> {code, label, divs | cells, rows}); null per ripiani e cassetti
+function opts(m, it) {
+  const r = new Map(), wi = String(m.wi);
+  if (it.t === 'v') {
+    const [, hh, fam] = VAS[it.a];
+    for (const c of CAT.vas) if (fam.includes(c.slice(0, 3)) && c[3] === wi && +c.slice(4, 6) === hh && +c.slice(6, 8) === m.di)
+      r.set(+c.slice(11), { code: c, label: `${+c.slice(11)} divisori`, divs: +c.slice(11) });
+  } else if (it.t === 'x') {
+    for (const c of CAT.kd) if (c[0] === wi && +c.slice(1, 3) === it.a && +c.slice(3, 5) === it.b) {
+      const ss = +c.slice(7, 9), big = +c[9];
+      r.set(ss, { code: 'KDU' + c, label: `${ss} piccoli + ${big} grandi`, cells: [...Array(big).fill(2), ...Array(ss).fill(1)] });
+    }
+  } else if (it.t === 'f' || it.t === 'l') { // laterali: stesse sigle KFD ma larghezza 1 (263 mm), spessore 110
+    const lat = it.t === 'l', [, hh, dd] = lat ? [0, it.a, 11] : FV[it.a], w1 = lat ? '1' : wi;
+    for (const c of CAT.kfd) if (c[0] === w1 && +c.slice(1, 3) === hh && +c.slice(3, 5) === dd) {
+      const q = c.slice(8), n = +q.slice(0, 2), wd = q.length > 2 ? +q.slice(2) : 0, uniform = !lat && 'abc'.includes(it.a); // a,b,c: q = numero cassetti; d,e,l: stretti (+ larghi)
+      r.set(n, { code: 'KDU' + c, label: uniform ? `${n} cassetti` : `${n} stretti + ${wd} larghi`, cells: uniform ? Array(n).fill(2) : [...Array(wd).fill(2), ...Array(n).fill(1)] });
+    }
+  } else return null;
+  return r;
+}
+function normItem(m, it) {
+  it.hi = it.t === 's' ? 1 : it.t === 'v' ? VAS[it.a][1] : it.t === 'x' || it.t === 'l' ? it.a : it.t === 'f' ? FV[it.a][1] : it.t === 'c' ? PAN[it.a][1] : it.hi;
+  const o = opts(m, it);
+  if (o && !o.has(it.o)) it.o = o.keys().next().value;
+}
+// codice, descrizione e profondita (mm) del componente; code = null se la combinazione non e' a catalogo
+function spec(m, it) {
+  const w = WID[m.wi], d = m.di * 10, o = opts(m, it)?.get(it.o);
+  if (it.t === 's') { const c = `XOS${m.wi}01${m.di}`; return { code: SET.xos.has(c.slice(3)) ? c : null, desc: `Ripiano aperto ${w}x36x${d}`, dep: d }; }
+  if (it.t === 'd') { const c = `KDW${m.wi}${p2(it.hi)}${m.di}`; return { code: SET.kdw.has(c.slice(3)) ? c : null, desc: `Cassetto frontale ${w}x${it.hi * 36}x${d}`, dep: d }; }
+  if (it.t === 'v') return { code: o?.code ?? null, desc: `Vasca ${VAS[it.a][0]} ${w}x${it.hi * 36}x${d}, ${it.o ?? '?'} divisori`, dep: d };
+  if (it.t === 'x') return { code: o?.code ?? null, desc: `Cassettiera estraibile MultiBox ${w}x${it.hi * 36}x${it.b * 10}${o ? ', ' + o.label : ''}`, dep: it.b * 10 };
+  if (it.t === 'c') { const c = `${PAN[it.a][2]}${m.wi}${p2(it.hi)}00`; return { code: SET.pan.has(c) ? c : null, desc: `Pannello di chiusura ${PAN[it.a][0]} ${w}x${it.hi * 36}`, dep: 4 }; }
+  if (it.t === 'l') return { code: o?.code ?? null, desc: `Cassettiera laterale MultiBox ${LAT.w}x${it.hi * 36}x${LAT.th} (${it.e === 'r' ? 'posteriore' : 'anteriore'})${o ? ', ' + o.label : ''}`, dep: LAT.w };
+  return { code: o?.code ?? null, desc: `Cassettiera ribaltabile MultiBox ${FV[it.a][0]} ${w}x${it.hi * 36}x${FV[it.a][2] * 10}${o && !'abc'.includes(it.a) ? ', ' + o.label : ''}`, dep: FV[it.a][2] * 10 };
+}
+function fit(m) {
+  const hs = hhOpts(m); if (hs.length && !hs.includes(m.hh)) m.hh = hs.filter(v => v <= m.hh).pop() ?? hs[0];
+  m.items.forEach(it => normItem(m, it));
+  m.z = cl(m.z, ext(m, 'f'), L() - WID[m.wi] - 2 * F - ext(m, 'r')); m.y = cl(m.y, 0, H() - m.hh * 36);
+  m.items.forEach(it => it.p = Math.round(cl(it.p, 0, m.hh - slots(it))));
+}
+// ---- collisioni e corridoio
+const MIN_AISLE = 600; // mm di passaggio libero minimo (ipotesi: modificala se serve)
+const boxHit = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.z0 < b.z1 && b.z0 < a.z1 && a.y0 < b.y1 && b.y0 < a.y1;
+const fp = m => { // ingombro del modulo: x lungo la larghezza del vano, z verso i portelloni, y in altezza
+  const d = m.di * 10, left = m.side === 'L';
+  return { x0: left ? -W / 2 : W / 2 - d, x1: left ? -W / 2 + d : W / 2, z0: m.z - ext(m, 'f'), z1: m.z + WID[m.wi] + 2 * F + ext(m, 'r'), y0: m.y, y1: m.y + m.hh * 36 };
+};
+const fpObj = o => { const x0 = o.side === 'L' ? -W / 2 : o.side === 'R' ? W / 2 - o.d : -o.d / 2; return { x0, x1: x0 + o.d, z0: o.z, z1: o.z + o.w, y0: o.y, y1: o.y + o.h }; };
+const obst = () => [...S.mods.map((m, i) => ({ r: m, f: fp(m), n: `modulo ${i + 1}` })), ...S.objs.map((o, i) => ({ r: o, f: fpObj(o), n: `oggetto ${i + 1}` }))];
+// massimo spazio libero continuo in larghezza alla quota z (passaruota a terra inclusi)
+function aisleAt(z, all) {
+  const iv = all.filter(o => z >= o.f.z0 && z <= o.f.z1).map(o => [o.f.x0, o.f.x1]);
+  if (z >= archZ() && z <= archZ() + ARCH.l) iv.push([-W / 2, -W / 2 + ARCH.in], [W / 2 - ARCH.in, W / 2]);
+  iv.sort((a, b) => a[0] - b[0]);
+  let best = 0, x = -W / 2;
+  for (const [a, b] of iv) { best = Math.max(best, a - x); x = Math.max(x, b); }
+  return Math.round(Math.max(best, W / 2 - x));
+}
+const aisleMin = (z0, z1, all = obst()) => { let w = W; for (let z = z0; z <= z1; z += 25) w = Math.min(w, aisleAt(z, all)); return w; };
+// altezza massima del passaruota nel tratto a..b (z dalla paratia): interpolazione sulla sagoma
+const archH = (a, b) => {
+  const lo = Math.max(a, archZ()) - archZ(), hi = Math.min(b, archZ() + ARCH.l) - archZ();
+  if (lo >= hi) return 0;
+  const at = z => { for (let i = 1; i < ARCH.pts.length; i++) { const [z0, h0] = ARCH.pts[i - 1], [z1, h1] = ARCH.pts[i]; if (z1 > z0 && z >= z0 && z <= z1) return h0 + (h1 - h0) * (z - z0) / (z1 - z0); } return 0; };
+  return Math.max(at(lo), at(hi), ...ARCH.pts.filter(([z]) => z > lo && z < hi).map(p => p[1]));
+};
+function hazards(self, f) { // avvisi geometrici per un ingombro f (modulo o oggetto)
+  const w = [];
+  obst().forEach(o => { if (o.r !== self && boxHit(f, o.f)) w.push(`interseca il ${o.n}`); });
+  if (f.z0 < 0 || f.z1 > L()) w.push('fuori dal vano');
+  const ai = aisleMin(Math.max(0, f.z0), Math.min(L(), f.z1));
+  if (ai < MIN_AISLE) w.push(`corridoio ridotto a ${ai} mm (minimo ${MIN_AISLE})`);
+  if (f.x1 >= W / 2 - 1 && f.y0 < DOOR.h && f.z0 < DOOR.z + DOOR.l && f.z1 > DOOR.z) w.push('ostruisce la porta scorrevole');
+  if ((f.x0 < -W / 2 + ARCH.in || f.x1 > W / 2 - ARCH.in) && f.y0 < archH(f.z0, f.z1)) w.push('interferisce col passaruota: alza la quota da terra');
+  return w;
+}
+function warns(m) {
+  const w = hazards(m, fp(m));
+  if (!SET.ksi.has(ksiCode(m).slice(3))) w.push('fianchi non a catalogo');
+  if (m.items.some((o, i) => m.items.some((q, j) => j > i && grp(o) === grp(q) && o.p < q.p + slots(q) && q.p < o.p + slots(o)))) w.push('componenti sovrapposti');
+  m.items.forEach((it, i) => { const s = spec(m, it); if (!s.code) w.push(`${i + 1}: non a catalogo in questa combinazione`); if (s.dep > m.di * 10) w.push(`${i + 1}: piu profondo del modulo`); });
+  return w.join(' | ');
+}
+const warnsObj = o => hazards(o, fpObj(o)).join(' | ');
+const fitObj = o => { o.w = cl(o.w, 10, L()); o.h = cl(o.h, 10, H()); o.d = cl(o.d, 10, W); o.z = cl(o.z, 0, L() - o.w); o.y = cl(o.y, 0, H() - o.h); };
+
+// ---- scena
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf1f3f5);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 2));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(1, 2, 1.5); scene.add(sun);
+const camera = new THREE.PerspectiveCamera(40, 1, 10, 30000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+$('view').appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+const world = new THREE.Group(); scene.add(world);
+
+// texture procedurali illustrative (canvas), nessun file esterno
+const canvasTex = (w, h, draw, rx = 1, ry = 1) => {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.colorSpace = THREE.SRGBColorSpace; return t;
+};
+const noise = (g, w, h, n, a) => { for (let i = 0; i < n; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '0,0,0' : '255,255,255'},${a})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } };
+const metalTex = base => canvasTex(128, 128, (g, w, h) => { g.fillStyle = base; g.fillRect(0, 0, w, h); noise(g, w, h, 1500, .05); });
+const woodTex = () => canvasTex(256, 256, (g, w, h) => { // multistrato di betulla
+  g.fillStyle = '#dcc08f'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 70; i++) { g.strokeStyle = `rgba(120,80,40,${.08 + Math.random() * .12})`; g.beginPath(); const y = Math.random() * h; g.moveTo(0, y); g.bezierCurveTo(w / 3, y + 6, 2 * w / 3, y - 6, w, y); g.stroke(); }
+});
+const holesTex = () => canvasTex(100, 72, (g, w, h) => { // fori passo 50 x 36 mm, come i fianchi Syncro
+  g.fillStyle = '#9aa3ae'; g.fillRect(0, 0, w, h); noise(g, w, h, 300, .05);
+  g.fillStyle = '#3a4047'; g.beginPath(); g.arc(w / 2, h / 2, 11, 0, 7); g.fill();
+});
+const mat = (c, map) => new THREE.MeshLambertMaterial({ color: c, map });
+const holes = holesTex(), sideMats = new Map(); // shortcut: cache senza dispose, irrilevante per poche decine di misure
+const sideMat = (d, h, sel) => { // sel: 0 normale, 1 selezionato, 2 con avvisi // un materiale per misura fianco, con repeat = d/50 x h/36
+  const k = `${d}x${h}x${sel}`;
+  if (!sideMats.has(k)) { const t = holes.clone(); t.repeat.set(d / 50, h / 36); t.needsUpdate = true; sideMats.set(k, mat(sel === 1 ? 0xffb066 : sel === 2 ? 0xff8a8a : 0xffffff, t)); }
+  return sideMats.get(k);
+};
+const M = { floor: mat(0xffffff, woodTex()), arch: mat(0xffffff, metalTex('#4a5057')), side: mat(0x8f98a3), shelf: mat(0xffffff, metalTex('#d5dde5')), drawer: mat(0xffffff, metalTex('#2f6db5')), handle: mat(0x222222), clear: new THREE.MeshLambertMaterial({ color: 0x9fd3ff, transparent: true, opacity: .55, depthWrite: false }), crate: mat(0x2d9cdb), crateIn: mat(0x1b4f73), obj: new THREE.MeshLambertMaterial({ color: 0xc9a66b, transparent: true, opacity: .85 }), objBad: new THREE.MeshLambertMaterial({ color: 0xe06666, transparent: true, opacity: .85 }) };
+M.floor.map.repeat.set(W / 600, 5);
+const glass = new THREE.MeshBasicMaterial({ color: 0x88aacc, transparent: true, opacity: .08, side: THREE.DoubleSide, depthWrite: false });
+const line = c => new THREE.LineBasicMaterial({ color: c });
+const box = (g, [x, y, z], [w, h, d], m) => {
+  const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+  o.position.set(x + w / 2, y + h / 2, z + d / 2); g.add(o); return o;
+};
+
+// contenitori Euronorm 400x290: girati (290 in profondita) sui ripiani da 310/360
+const crateGrid = (d, w) => { const a = d >= 410 ? 400 : 290, b = d >= 410 ? 290 : 400; return { a, b, n: d < 310 ? 0 : Math.floor(w / b) }; };
+const CRATE_H = 170;
+
+// vasca scaffale: fondo, bordi e divisori in alluminio
+function tray(x, y, z, dep, w, hh, n) {
+  box(world, [x, y, z], [dep, 4, w], M.shelf);
+  for (const xx of [x, x + dep - 3]) box(world, [xx, y, z], [3, hh, w], M.shelf);
+  for (const zz of [z, z + w - 3]) box(world, [x, y, zz], [dep, hh, 3], M.shelf);
+  for (let k = 1; k <= n; k++) box(world, [x, y, z + k * w / (n + 1) - 1.5], [dep, Math.min(hh, 140), 3], M.side);
+}
+// cassettiera MultiBox: piani sopra/sotto e cassetti trasparenti; cells = larghezze in mezze unita' (1 stretto, 2 largo) riempite a righe.
+// along = lunghezza lungo cui si dispongono i cassetti (asse z per le frontali, x per le laterali), across = profondita; maniglie sul lato across (end) o all'inizio
+function drawers(x, y, z, along, across, hh, cells, wi, axis, handleEnd) {
+  const rows = cells.reduce((a, c) => a + c, 0) / (2 * wi), hu = along / (2 * wi), rh = hh / rows;
+  const B = (a0, an, c0, cn, yy, h, m) => axis === 'z' ? box(world, [x + c0, yy, z + a0], [cn, h, an], m) : box(world, [x + a0, yy, z + c0], [an, h, cn], m);
+  B(0, along, 0, across, y, 4, M.shelf); B(0, along, 0, across, y + hh - 4, 4, M.shelf);
+  let r = 0, u = 0;
+  for (const c of cells) {
+    if (u + c > 2 * wi) { r++; u = 0; }
+    const cw = c * hu, hz = Math.min(120, cw - 30);
+    B(u * hu + 2, cw - 4, 0, across, y + r * rh + 2, rh - 4, M.clear);
+    B(u * hu + (cw - hz) / 2, hz, handleEnd ? across : -10, 10, y + r * rh + rh / 2 - 6, 12, M.handle);
+    u += c;
+  }
+}
+
+function rebuild() {
+  world.traverse(o => o.geometry?.dispose()); world.clear();
+  const l = L(), h = H();
+  const shell = new THREE.Mesh(new THREE.BoxGeometry(W, h, l), glass);
+  shell.position.set(0, h / 2, l / 2); world.add(shell);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(shell.geometry), line(0x445566));
+  edges.position.copy(shell.position); world.add(edges);
+  M.floor.map.repeat.y = l / 600;
+  box(world, [-W / 2, -10, 0], [W, 10, l], M.floor);
+  // passaruota: sagoma ARCH.pts estrusa per lo spessore che entra nel vano
+  const arc = new THREE.Shape(ARCH.pts.map(([z, h]) => new THREE.Vector2(z, h)));
+  for (const x of [-W / 2 + ARCH.in, W / 2]) {
+    const g = new THREE.ExtrudeGeometry(arc, { depth: ARCH.in, bevelEnabled: false }).rotateY(-Math.PI / 2); // x in [-in, 0]
+    const o = new THREE.Mesh(g, M.arch); o.position.set(x, 0, archZ()); world.add(o);
+  }
+  const door = [[DOOR.z, 0], [DOOR.z + DOOR.l, 0], [DOOR.z + DOOR.l, DOOR.h], [DOOR.z, DOOR.h]].map(([z, y]) => new THREE.Vector3(W / 2, y, z));
+  world.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(door), line(0x2a7fff)));
+
+  S.mods.forEach((m, i) => {
+    const w = WID[m.wi], d = m.di * 10, left = m.side === 'L';
+    const x0 = left ? -W / 2 : W / 2 - d, z0 = m.z + F;
+    const sm = sideMat(d, m.hh * 36, i === S.sel ? 1 : hazards(m, fp(m)).length ? 2 : 0);
+    for (const zz of [m.z, z0 + w]) box(world, [x0, m.y, zz], [d, m.hh * 36, F], [M.side, M.side, M.side, M.side, sm, sm]);
+    m.items.forEach(it => {
+      const y0 = m.y + it.p * 36, hh = it.hi * 36, sp = spec(m, it), o = opts(m, it)?.get(it.o);
+      const dep = Math.min(sp.dep, d), ix = left ? x0 + d - dep : x0; // componenti meno profondi del modulo: a filo corridoio
+      if (it.t === 's') {
+        box(world, [x0, y0, z0], [d, 4, w], M.shelf);
+        box(world, [left ? x0 + d - 3 : x0, y0, z0], [3, 36, w], M.shelf); // bordo piegato lato corridoio
+        if (it.c) {
+          const { a, b, n } = crateGrid(d, w), zs = z0 + (w - n * b) / 2;
+          for (let k = 0; k < n; k++) {
+            const cx = left ? x0 : x0 + d - a, cz = zs + k * b + 2;
+            box(world, [cx + 2, y0 + 4, cz], [a - 4, CRATE_H, b - 4], M.crate);
+            box(world, [cx + 14, y0 + 4 + CRATE_H, cz + 12], [a - 28, 1, b - 28], M.crateIn); // apertura
+          }
+        }
+      } else if (it.t === 'd') {
+        const hz = Math.min(200, w - 40);
+        box(world, [x0, y0 + 4, z0], [d, hh - 8, w], M.drawer);
+        box(world, [left ? x0 + d : x0 - 12, y0 + hh / 2 - 7, z0 + (w - hz) / 2], [12, 14, hz], M.handle);
+      } else if (it.t === 'v') tray(ix, y0, z0, dep, w, hh, o?.divs ?? 0);
+      else if (it.t === 'c') box(world, [left ? x0 + d - 4 : x0, y0, z0], [4, hh, w], M.shelf); // pannello a filo corridoio
+      else if (it.t === 'l') { if (o) drawers(ix, y0, it.e === 'r' ? z0 + w + F : m.z - LAT.th, dep, LAT.th, hh, o.cells, 1, 'x', it.e === 'r'); else box(world, [ix, y0, m.z - LAT.th], [dep, hh, LAT.th], M.clear); }
+      else if (o) drawers(ix, y0, z0, w, dep, hh, o.cells, m.wi, 'z', left);
+      else box(world, [ix, y0, z0], [dep, hh, w], M.clear); // combinazione non a catalogo: ingombro
+    });
+  });
+  S.objs.forEach(o => { // oggetti dal catalogo: ingombro con spigoli, rosso se hanno avvisi
+    const f = fpObj(o), m = box(world, [f.x0, f.y0, f.z0], [f.x1 - f.x0, o.h, o.w], hazards(o, f).length ? M.objBad : M.obj);
+    const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), line(0x5b4a2e)); e.position.copy(m.position); world.add(e);
+  });
+  renderBom(); $('modwarn').hidden = !(S.mods.some(m => warns(m)) || S.objs.some(o => warnsObj(o)));
+  const ai = aisleMin(0, l);
+  $('info').innerHTML = `Interno: ${l} x ${W} x ${h} mm &middot; tra passaruota ${W - 2 * ARCH.in} &middot; <span class="${ai < MIN_AISLE ? 'font-semibold text-red-600' : ''}">corridoio minimo ${ai} mm</span>`;
+  try { localStorage.setItem('syncro-cfg2', JSON.stringify({ len: S.len, hgt: S.hgt, mods: S.mods, objs: S.objs, extra: S.extra })); } catch {}
+}
+
+function setView(v) {
+  const c = new THREE.Vector3(0, H() / 2, L() / 2);
+  camera.position.copy(c).addScaledVector(new THREE.Vector3(...VIEWS[v]).normalize(), Math.max(L(), W, H()) * 1.7);
+  controls.target.copy(c); controls.update();
+}
+const resize = () => {
+  const el = $('view'); renderer.setSize(el.clientWidth, el.clientHeight);
+  camera.aspect = el.clientWidth / el.clientHeight; camera.updateProjectionMatrix();
+};
+new ResizeObserver(resize).observe($('view'));
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+document.querySelectorAll('[data-v]').forEach(b => b.onclick = () => setView(b.dataset.v));
+
+// ---- carrozzeria (transit.glb, da STEP in mm con pianale z=0 e paratia y=0): semitrasparente
+const van = new THREE.Group(); scene.add(van);
+let vanObj = null;
+const placeVan = () => vanObj?.position.set(0, 0, L() - LEN.L1); // glb in metri (scala 1000 -> mm); L2: solo traslato
+function useVan(buf) {
+  new GLTFLoader().parse(buf, '', g => {
+    g.scene.traverse(o => o.isMesh && ([].concat(o.material).forEach(m => { m.transparent = true; m.opacity = .22; m.depthWrite = false; })));
+    vanObj = g.scene; vanObj.scale.setScalar(1000); van.clear(); van.add(vanObj); placeVan();
+  });
+}
+$('body').onchange = e => van.visible = e.target.checked;
+if (window.VAN_B64) useVan(Uint8Array.from(atob(VAN_B64), c => c.charCodeAt(0)).buffer); // carrozzeria incorporata (transit.glb.js)
+
+// ---- pannello (Tailwind)
+const list = $('list');
+const IN = 'w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400';
+const IN2 = IN.replace('w-full', 'min-w-[9rem] flex-1');
+const opt = (vals, cur, lab = v => v) => vals.map(v => `<option value="${v}"${v == cur ? ' selected' : ''}>${lab(v)}</option>`).join('');
+const sel = (k, vals, cur, lab, cls = IN) => `<select data-k="${k}" class="${cls}">${opt(vals, cur, lab)}</select>`;
+const field = (label, html, cls = '') => `<label class="${cls}"><span class="mb-0.5 block text-[11px] font-medium text-slate-500">${label}</span>${html}</label>`;
+const h4 = t => `<h4 class="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">${t}</h4>`;
+const DRAWER_H = [2, 3, 4, 5, 6];
+// catalogo completo (catalog-full.js): codice -> pagina PDF; le pagine sono immagini in img/
+const CA = window.CATALL, PGMAP = new Map();
+for (const it of CA.items) if (!PGMAP.has(it[0])) PGMAP.set(it[0], it[3]);
+const pgBtn = code => PGMAP.has(code) ? `<button data-pg="${PGMAP.get(code)}" title="Apri la pagina del catalogo" class="rounded bg-slate-200 px-1.5 font-sans text-[10px] text-slate-600 hover:bg-slate-300">pag. ${PGMAP.get(code) - 2}</button>` : '';
+const summary = m => `${m.side === 'L' ? 'Sx' : 'Dx'} · ${WID[m.wi]}×${m.hh * 36}×${m.di * 10} · ${m.items.length} comp.`;
+
+function itemRow(m, it, j) {
+  const o = opts(m, it), sp = spec(m, it), sub = [];
+  if (it.t === 's') sub.push(`<label class="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" data-k="crate"${it.c ? ' checked' : ''}>Contenitori Euronorm</label>`);
+  if (it.t === 'd') sub.push(sel('hi', DRAWER_H, it.hi, v => 'H ' + v * 36, IN2));
+  if (it.t === 'v') sub.push(sel('a', Object.keys(VAS), it.a, k => VAS[k][0], IN2));
+  if (it.t === 'x') sub.push(sel('a', [4, 7], it.a, v => 'H ' + v * 36, IN2), sel('b', [21, 26], it.b, v => 'P ' + v * 10, IN2));
+  if (it.t === 'f') sub.push(sel('a', Object.keys(FV), it.a, k => FV[k][0], IN2));
+  if (it.t === 'l') sub.push(sel('a', [9, 13], it.a, v => 'H ' + v * 36, IN2), sel('e', ['r', 'f'], it.e, v => v === 'r' ? 'Lato posteriore' : 'Lato anteriore', IN2));
+  if (it.t === 'c') sub.push(sel('a', Object.keys(PAN), it.a, k => PAN[k][0], IN2));
+  if (o?.size > 1) sub.push(`<select data-k="o" class="${IN2}">${[...o].map(([k, v]) => `<option value="${k}"${k == it.o ? ' selected' : ''}>${v.label}</option>`).join('')}</select>`);
+  const pg = PGMAP.get(sp.code);
+  return `<div class="item space-y-1.5 rounded-md border border-slate-200 bg-slate-50 p-2" data-it="${j}">
+    <div class="flex items-center gap-1.5">
+      ${sel('kind', Object.keys(TYPES), it.t, k => TYPES[k][0], 'min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-medium')}
+      <input type="number" step="36" data-k="pos" value="${it.p * 36}" title="Quota interna dalla base del fianco, mm" class="${IN.replace('w-full', 'w-20')}">
+      <button data-delitem title="Rimuovi" class="rounded px-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">&#10005;</button>
+    </div>
+    ${sub.length ? `<div class="flex flex-wrap items-center gap-1.5">${sub.join('')}</div>` : ''}
+    <p class="flex items-center gap-2 font-mono text-[11px] ${sp.code ? 'text-slate-500' : 'text-red-600'}"><span>${sp.code ?? 'non a catalogo in questa combinazione'}</span>${pgBtn(sp.code)}</p>
+  </div>`;
+}
+function card(m, i) {
+  const open = i === S.sel, w = warns(m);
+  return `<div class="card rounded-lg border bg-white ${open ? 'border-orange-400 ring-1 ring-orange-400' : 'border-slate-200'}" data-m="${i}">
+    <button data-head class="flex w-full items-center gap-2 px-3 py-2 text-left">
+      <span class="font-semibold">Modulo ${i + 1}</span>
+      <span data-sum class="min-w-0 flex-1 truncate text-xs text-slate-500">${summary(m)}</span>
+      <span data-badge class="rounded-full bg-red-100 px-1.5 text-xs font-bold text-red-700" ${w ? '' : 'hidden'}>!</span>
+      <span data-chev class="text-slate-400 transition-transform ${open ? 'rotate-180' : ''}">&#9662;</span>
+    </button>
+    <div data-body class="space-y-3 border-t border-slate-100 px-3 pb-3 pt-2" ${open ? '' : 'hidden'}>
+      <div>${h4('Posizione')}<div class="grid grid-cols-2 gap-2">
+        ${field('Lato', sel('side', ['L', 'R'], m.side, v => v === 'L' ? 'Sinistra (guidatore)' : 'Destra (porta scorrevole)'), 'col-span-2')}
+        ${field('Dist. da paratia (mm)', `<input type="number" data-k="z" value="${m.z}" class="${IN}">`)}
+        ${field('Quota da terra (mm)', `<input type="number" data-k="y" value="${m.y}" class="${IN}">`)}
+      </div></div>
+      <div><div class="flex items-center justify-between">${h4('Fianchi (KSI)')}${pgBtn(ksiCode(m))}</div><div class="grid grid-cols-3 gap-2">
+        ${field('Larghezza', sel('wi', Object.keys(WID), m.wi, v => WID[v]))}
+        ${field('Profondita', sel('di', DEPTHS, m.di, v => v * 10))}
+        ${field('Altezza', sel('hh', hhOpts(m), m.hh, v => v * 36))}
+      </div></div>
+      <div>${h4(`Componenti (${m.items.length})`)}
+        <div class="space-y-1.5">${m.items.map((it, j) => itemRow(m, it, j)).join('') || '<p class="text-xs text-slate-400">Nessun componente.</p>'}</div>
+        <div class="mt-2 flex gap-1.5">
+          <select data-addsel class="${IN2}">${opt(Object.keys(TYPES), 's', k => TYPES[k][0])}</select>
+          <button data-add class="rounded-md bg-slate-800 px-3 py-1 text-sm font-medium text-white hover:bg-slate-700">+ Aggiungi</button>
+        </div>
+      </div>
+      <p data-warn class="rounded bg-red-50 px-2 py-1 text-xs text-red-700" ${w ? '' : 'hidden'}>${w}</p>
+      <button data-del class="text-xs text-red-600 hover:underline">Elimina modulo</button>
+    </div>
+  </div>`;
+}
+const renderList = () => list.innerHTML = S.mods.map(card).join('') || '<p class="text-slate-500">Nessun modulo: aggiungine uno con "+ Modulo".</p>';
+function refreshCard(c, m) { // aggiorna riepilogo e avvisi senza ricreare il DOM (non perde il focus)
+  const w = warns(m), p = c.querySelector('[data-warn]');
+  p.textContent = w; p.hidden = !w; c.querySelector('[data-badge]').hidden = !w; c.querySelector('[data-sum]').textContent = summary(m);
+}
+function select(i) {
+  S.sel = i;
+  [...list.children].forEach((c, j) => {
+    c.classList.toggle('border-orange-400', j === i); c.classList.toggle('ring-1', j === i); c.classList.toggle('ring-orange-400', j === i); c.classList.toggle('border-slate-200', j !== i);
+    c.querySelector('[data-body]').hidden = j !== i; c.querySelector('[data-chev]').classList.toggle('rotate-180', j === i);
+  });
+  rebuild();
+}
+const ctx = e => {
+  const c = e.target.closest('.card'), r = e.target.closest('.item'), m = S.mods[+c.dataset.m];
+  return { c, m, it: r && m.items[+r.dataset.it] };
+};
+
+list.oninput = e => {
+  const k = e.target.dataset.k; if (!k) return;
+  const { c, m, it } = ctx(e), v = e.target.value;
+  if (k === 'pos') it.p = Math.round(v / 36);
+  else if (k === 'kind') { const p = it.p; Object.keys(it).forEach(x => delete it[x]); Object.assign(it, newItem(v), { p }); }
+  else if (k === 'crate') it.c = e.target.checked;
+  else if (k === 'e') it.e = v;
+  else if (k === 'a' || k === 'b' || k === 'o' || k === 'hi') it[k] = k === 'a' && !'xl'.includes(it.t) ? v : +v;
+  else m[k] = k === 'side' ? v : +v;
+  fit(m);
+  if (e.target.tagName === 'SELECT') { S.sel = +c.dataset.m; renderList(); } else refreshCard(c, m);
+  select(+c.dataset.m);
+};
+list.onchange = e => { // a fine modifica riallinea i campi ai valori corretti, senza ricreare il DOM
+  if (e.target.tagName === 'SELECT') return;
+  const { c, m } = ctx(e);
+  c.querySelectorAll('input[type=number]').forEach(i => i.value = i.dataset.k === 'pos' ? m.items[+i.closest('.item').dataset.it].p * 36 : m[i.dataset.k]);
+};
+list.onclick = e => {
+  const c = e.target.closest('.card'); if (!c) return;
+  const i = +c.dataset.m, m = S.mods[i], d = e.target.closest('button')?.dataset ?? {};
+  if (d.head !== undefined) return select(S.sel === i ? -1 : i);
+  if (d.del !== undefined) { S.mods.splice(i, 1); S.sel = -1; renderList(); rebuild(); return; }
+  if (d.add !== undefined) { const it = { ...newItem(c.querySelector('[data-addsel]').value), p: 0 }; normItem(m, it); it.p = free(m, it); m.items.push(it); fit(m); S.sel = i; renderList(); }
+  if (d.delitem !== undefined) { m.items.splice(+e.target.closest('.item').dataset.it, 1); fit(m); S.sel = i; renderList(); }
+  if (e.target.closest('[data-body]')) select(i);
+};
+$('addmod').onclick = () => {
+  const m = { side: 'L', z: 0, y: 0, wi: 2, di: 31, hh: 14, items: [] };
+  fit(m); S.mods.push(m); S.sel = S.mods.length - 1; renderList(); select(S.sel); showTab('mods');
+};
+for (const k of ['len', 'hgt']) $(k).onchange = e => {
+  S[k] = e.target.value; S.mods.forEach(fit); S.objs.forEach(fitObj); renderList(); renderObjs(); rebuild(); placeVan(); setView('iso');
+};
+function showTab(t) {
+  document.querySelectorAll('[data-tab]').forEach(b => { b.setAttribute('aria-selected', b.dataset.tab === t); $('tab-' + b.dataset.tab).hidden = b.dataset.tab !== t; });
+}
+document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// ---- distinta (pannello e PDF)
+function bomRows() {
+  const bom = new Map();
+  const add = (code, desc, n = 1) => { const r = bom.get(code) || { desc, n: 0 }; r.n += n; bom.set(code, r); };
+  S.mods.forEach(m => {
+    const w = WID[m.wi], d = m.di * 10, k = ksiCode(m);
+    add(SET.ksi.has(k.slice(3)) ? k : `da verificare (fianchi ${w}x${m.hh * 36}x${d})`, `Coppia fianchi ${w}x${m.hh * 36}x${d}`);
+    m.items.forEach(it => {
+      const sp = spec(m, it); add(sp.code || `da verificare (${sp.desc})`, sp.desc);
+      if (it.t === 's' && it.c) for (let n = crateGrid(d, w).n; n--;) add('Euronorm (codice da verificare)', 'Contenitore Euronorm 400x290x170');
+    });
+  });
+  S.objs.forEach(o => add(o.code, `${o.desc} - nel vano ${o.w}x${o.h}x${o.d}`));
+  S.extra.forEach(x => add(x.code, x.desc, x.n));
+  return [...bom].map(([code, r]) => ({ code, ...r }));
+}
+function renderBom() {
+  const rows = bomRows();
+  $('bomn').textContent = rows.reduce((a, r) => a + r.n, 0);
+  $('bom').innerHTML = rows.length ? `<table class="w-full text-left text-xs"><thead class="text-[11px] uppercase text-slate-400"><tr><th class="w-8 pb-1">Q.ta</th><th class="pb-1">Codice / descrizione</th></tr></thead><tbody>${rows.map(r =>
+    `<tr class="border-t border-slate-200 align-top"><td class="py-1.5 font-semibold">${r.n}</td><td class="py-1.5"><span class="font-mono ${r.code.includes('verificare') ? 'text-amber-700' : 'text-slate-800'}">${r.code}</span> ${pgBtn(r.code)}<br><span class="text-slate-500">${r.desc}</span></td></tr>`).join('')}</tbody></table>`
+    : '<p class="text-slate-500">Nessun componente.</p>';
+}
+
+// ---- oggetti nel vano (articoli del catalogo con ingombro): stesso controllo collisioni dei moduli
+const objsEl = $('objs');
+const objCard = (o, i) => {
+  const w = warnsObj(o), n = (k, v) => `<input type="number" data-k="${k}" value="${v}" class="${IN}">`;
+  return `<div class="obj space-y-1.5 rounded-lg border border-slate-200 bg-white p-2" data-o="${i}">
+    <div class="flex items-start gap-2"><div class="min-w-0 flex-1"><p class="font-mono text-xs font-semibold">${o.code} ${pgBtn(o.code)}</p><p class="truncate text-xs text-slate-500" title="${o.desc}">${o.desc}</p></div>
+      <button data-delobj title="Rimuovi" class="rounded px-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">&#10005;</button></div>
+    <div class="grid grid-cols-3 gap-2">
+      ${field('Lato', sel('side', ['L', 'R', 'C'], o.side, v => ({ L: 'Sinistra', R: 'Destra', C: 'Centro' })[v]))}
+      ${field('Dist. paratia', n('z', o.z))}${field('Quota da terra', n('y', o.y))}
+      ${field('Larghezza (z)', n('w', o.w))}${field('Altezza', n('h', o.h))}${field('Profondita', n('d', o.d))}
+    </div>
+    <p data-warn class="rounded bg-red-50 px-2 py-1 text-xs text-red-700" ${w ? '' : 'hidden'}>${w}</p></div>`;
+};
+function renderObjs() { $('objsbox').hidden = !S.objs.length; objsEl.innerHTML = S.objs.map(objCard).join(''); }
+objsEl.oninput = e => {
+  const k = e.target.dataset.k; if (!k) return;
+  const c = e.target.closest('.obj'), o = S.objs[+c.dataset.o];
+  o[k] = k === 'side' ? e.target.value : +e.target.value; fitObj(o);
+  if (e.target.tagName === 'SELECT') renderObjs(); else { const w = warnsObj(o), p = c.querySelector('[data-warn]'); p.textContent = w; p.hidden = !w; }
+  rebuild();
+};
+objsEl.onchange = e => { // riallinea i campi ai valori corretti
+  if (e.target.tagName === 'SELECT') return;
+  const c = e.target.closest('.obj'), o = S.objs[+c.dataset.o];
+  c.querySelectorAll('input[type=number]').forEach(i => i.value = o[i.dataset.k]);
+};
+objsEl.onclick = e => { const b = e.target.closest('[data-delobj]'); if (b) { S.objs.splice(+b.closest('.obj').dataset.o, 1); renderObjs(); rebuild(); } };
+
+// ---- scheda Catalogo: ricerca su tutto il catalogo, riferimenti pagina, aggiunta alla distinta o al vano
+const imgSrc = p => `img/p-${String(p).padStart(3, '0')}.jpg`;
+const PG_MIN = 24, PG_MAX = 244;
+let catMax = 40, lbp = 0;
+$('secsel').innerHTML = `<option value="-1">Tutto il catalogo</option>` + CA.sec.map(([t, a, b], i) => `<option value="${i}">${t} (pag. ${a - 2}-${b - 2})</option>`).join('');
+function renderCat() {
+  const q = $('q').value.trim().toLowerCase(), s = +$('secsel').value, res = [];
+  CA.items.forEach((it, i) => { if ((s < 0 || it[4] === s) && (!q || it[0].toLowerCase().includes(q) || it[1].toLowerCase().includes(q))) res.push(i); });
+  $('secinfo').innerHTML = (s >= 0 ? `<button data-pg="${CA.sec[s][1]}" class="rounded bg-sky-600 px-2 py-1 font-medium text-white hover:bg-sky-700">Sfoglia le pagine</button>` : '') + `<span>${res.length} articoli${s >= 0 && !res.length ? ': nessun codice estratto, guarda le pagine' : ''}</span>`;
+  $('catlist').innerHTML = res.slice(0, catMax).map(i => {
+    const [c, d, m, p] = CA.items[i];
+    return `<div class="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs">
+      <div class="flex items-center gap-2"><span class="font-mono font-semibold">${c}</span><span class="text-slate-400">${m ? m.join('x') : ''}</span><span class="flex-1"></span><button data-pg="${p}" class="rounded bg-slate-200 px-1.5 text-[10px] text-slate-600 hover:bg-slate-300">pag. ${p - 2}</button></div>
+      <p class="truncate text-slate-500" title="${d}">${d}</p>
+      <div class="mt-1 flex gap-1"><button data-extra="${i}" class="rounded bg-slate-800 px-2 py-0.5 text-white hover:bg-slate-700">+ Distinta</button>${m?.length === 3 ? `<button data-place="${i}" class="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-50">Posiziona nel vano</button>` : ''}</div></div>`;
+  }).join('') + (res.length > catMax ? `<button id="catmore" class="w-full rounded-md border border-slate-300 bg-white py-1.5 text-xs hover:bg-slate-50">Mostra altri (${res.length - catMax})</button>` : '');
+}
+$('q').oninput = () => { catMax = 40; renderCat(); };
+$('secsel').onchange = () => { catMax = 40; renderCat(); };
+$('tab-cat').onclick = e => {
+  if (e.target.id === 'catmore') { catMax += 40; return renderCat(); }
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.extra !== undefined) {
+    const [c, d, , p] = CA.items[+b.dataset.extra], x = S.extra.find(r => r.code === c);
+    x ? x.n++ : S.extra.push({ code: c, desc: d, page: p, n: 1 }); renderExtras(); rebuild(); b.textContent = 'Aggiunto \u2713';
+  }
+  if (b.dataset.place !== undefined) {
+    const [c, d, m, p] = CA.items[+b.dataset.place], o = { code: c, desc: d, page: p, side: 'L', z: 0, y: 0, w: m[0], h: m[1], d: m[2] };
+    fitObj(o); S.objs.push(o); renderObjs(); rebuild(); b.textContent = 'Posizionato \u2713';
+  }
+};
+// articoli extra (solo in distinta)
+function renderExtras() {
+  $('extras').innerHTML = S.extra.length ? `<h3 class="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Articoli aggiunti dal catalogo</h3><div class="space-y-1">${S.extra.map((x, i) => `
+    <div class="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs" data-x="${i}"><div class="min-w-0 flex-1"><span class="font-mono font-semibold">${x.code}</span> ${pgBtn(x.code)}<p class="truncate text-slate-500">${x.desc}</p></div>
+      <input type="number" min="1" data-k="n" value="${x.n}" class="w-14 rounded border border-slate-300 px-1 py-0.5"><button data-delx title="Rimuovi" class="px-1 text-slate-400 hover:text-red-600">&#10005;</button></div>`).join('')}</div>` : '';
+}
+$('extras').oninput = e => { const x = S.extra[+e.target.closest('[data-x]').dataset.x]; x.n = Math.max(1, Math.round(+e.target.value) || 1); rebuild(); };
+$('extras').onclick = e => { const b = e.target.closest('[data-delx]'); if (b) { S.extra.splice(+b.closest('[data-x]').dataset.x, 1); renderExtras(); rebuild(); } };
+
+// pagine del catalogo in sovraimpressione (immagini di riferimento in img/)
+function openPage(p) {
+  lbp = Math.min(PG_MAX, Math.max(PG_MIN, p));
+  const sec = CA.sec.filter(r => lbp >= r[1]).pop();
+  $('lbi').src = imgSrc(lbp); $('lbt').textContent = `Catalogo 26-1 \u00b7 pag. ${lbp - 2} (PDF ${lbp})${sec ? ' \u00b7 ' + sec[0] : ''}`; $('lb').hidden = false;
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-pg]'); if (b) openPage(+b.dataset.pg); });
+$('lbi').onerror = () => $('lbt').textContent += ' - immagine non disponibile (vedi README)';
+$('lbx').onclick = () => $('lb').hidden = true;
+$('lbprev').onclick = () => openPage(lbp - 1);
+$('lbnext').onclick = () => openPage(lbp + 1);
+document.addEventListener('keydown', e => { if ($('lb').hidden) return; if (e.key === 'Escape') $('lb').hidden = true; if (e.key === 'ArrowLeft') openPage(lbp - 1); if (e.key === 'ArrowRight') openPage(lbp + 1); });
+
+// ---- PDF
+$('pdf').onclick = () => {
+  const { jsPDF } = window.jspdf, doc = new jsPDF(), cv = renderer.domElement;
+  const p = camera.position.clone(), t = controls.target.clone(), sel = S.sel;
+  S.sel = -1; rebuild();
+  renderer.setSize(1200, 800); camera.aspect = 1.5; camera.updateProjectionMatrix();
+  const shots = ['iso', 'top', 'side'].map(v => { setView(v); renderer.render(scene, camera); return cv.toDataURL('image/jpeg', .9); });
+  resize(); camera.position.copy(p); controls.target.copy(t); controls.update(); S.sel = sel; rebuild();
+
+  doc.setFontSize(16); doc.text('Allestimento Syncro - Ford Transit Custom MK1.5 (2023)', 15, 18);
+  doc.setFontSize(10);
+  doc.text(`Passo ${S.len} (${L()} mm) | Altezza ${S.hgt} (${H()} mm) | Larghezza interna ${W} mm | ${new Date().toLocaleDateString('it-IT')}`, 15, 25);
+  doc.addImage(shots[0], 'JPEG', 15, 30, 180, 120);
+  doc.addImage(shots[1], 'JPEG', 15, 155, 88, 58.7);
+  doc.addImage(shots[2], 'JPEG', 107, 155, 88, 58.7);
+
+  let y = 224;
+  const row = s => { if (y > 282) { doc.addPage(); y = 20; } doc.text(s, 15, y); y += 6; };
+  doc.setFont(undefined, 'bold'); row('Moduli'); doc.setFont(undefined, 'normal');
+  S.mods.forEach((m, i) => row(`${i + 1}. ${m.side === 'L' ? 'Sx' : 'Dx'} | da paratia ${m.z} | quota ${m.y} | ${WID[m.wi]}x${m.hh * 36}x${m.di * 10} | ${m.items.length} componenti`));
+  S.objs.forEach((o, i) => row(`Oggetto ${i + 1}: ${o.code} | ${o.side === 'L' ? 'Sx' : o.side === 'R' ? 'Dx' : 'centro'} | da paratia ${o.z} | quota ${o.y} | ${o.w}x${o.h}x${o.d}`));
+  y += 2; doc.setFont(undefined, 'bold'); row('Distinta (codici catalogo 26-1)'); doc.setFont(undefined, 'normal');
+  bomRows().forEach(r => row(`${r.n} x ${r.code} - ${r.desc}`));
+  y += 2; doc.setFontSize(8);
+  row('Documento indicativo: misure del furgone e codici da verificare col rivenditore Syncro prima dell\'ordine. Sx = lato guidatore, Dx = lato porta scorrevole.');
+  doc.save('allestimento-transit-syncro.pdf');
+};
+
+S.sel = -1;
+$('len').value = S.len; $('hgt').value = S.hgt;
+S.mods.forEach(fit); S.objs.forEach(fitObj); renderList(); renderObjs(); renderExtras(); renderCat(); rebuild(); setView('iso'); showTab('mods');
+</script>
+</body>
+</html>
