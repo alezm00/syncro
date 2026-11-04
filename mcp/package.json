@@ -1,0 +1,10 @@
+{
+  "name": "syncro-mcp",
+  "version": "1.0.0",
+  "description": "Server MCP per configurare l'allestimento Syncro del Ford Transit Custom con un assistente AI",
+  "type": "module",
+  "bin": { "syncro-mcp": "server.mjs" },
+  "scripts": { "start": "node server.mjs", "test": "node test.mjs" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "@modelcontextprotocol/sdk": "^1.12.0", "zod": "^3.25.0" }
+}
