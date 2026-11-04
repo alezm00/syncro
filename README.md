@@ -9,7 +9,9 @@ Apri `index.html` nel browser (serve internet per three.js, jsPDF e Tailwind da 
 - Moduli = coppia di fianchi (KSI) con ripiani, cassetti, vasche, cassettiere estraibili/ribaltabili/laterali e pannelli di chiusura a passi di 36 mm.
 - Codici controllati sulle tabelle del catalogo (`catalog.js`): se la combinazione non esiste compare un avviso.
 - Controllo collisioni, ingombro del passaruota (sagoma misurata sul modello 3D), porta scorrevole e corridoio minimo (600 mm, ipotesi).
-- 12 modelli di allestimento pronti (caldaie, climatizzazione, elettrico, misto; per L1 e L2) caricabili dal menu in cima ai Moduli, generati da `tools/build_presets.py` con sole combinazioni valide a catalogo; attrezzatura personale (bombole, recuperatore, ecc.) posizionabile nel vano.
+- Moduli sollevati con fianchi sovrapposti (altezze a passi da 36 mm), sostegni a terra e barra fermavaligie; configurazione personalizzata del lato sinistro (gruppo Personalizzati).
+- Lunghezza utile fino ai portelloni chiusi: L1 2470 mm, L2 2870 mm (misurata sul modello 3D).
+- 13 modelli di allestimento pronti (caldaie, climatizzazione, elettrico, misto; per L1 e L2) caricabili dal menu in cima ai Moduli, generati da `tools/build_presets.py` con sole combinazioni valide a catalogo; attrezzatura personale (bombole, recuperatore, ecc.) posizionabile nel vano.
 - Evidenziazione al passaggio del mouse nei due sensi (pannello <-> modello 3D); clic sul modello apre il modulo.
 - Annulla / ripeti (Ctrl+Z, Ctrl+Maiusc+Z o Ctrl+Y, e pulsanti sopra il 3D).
 - Scheda Catalogo: ricerca su tutto il catalogo (`catalog-full.js`), aggiunta alla distinta o posizionamento nel vano.
@@ -24,6 +26,8 @@ Per rigenerare i file derivati:
 mkdir -p img && pdftoppm -f 24 -l 244 -scale-to-x 640 -scale-to-y -1 -jpeg -jpegopt quality=55 Catalogo-26-1-ita-ted-vers-15-04-2026.pdf img/p
 # dati del catalogo
 python3 tools/extract_catalog.py Catalogo-26-1-ita-ted-vers-15-04-2026.pdf
+python3 tools/extract_codes.py Catalogo-26-1-ita-ted-vers-15-04-2026.pdf   # catalog.js
+python3 tools/build_presets.py   # modelli di allestimento in index.html
 # carrozzeria: STEP -> glb -> transit.glb.js
 npm i occt-import-js @gltf-transform/core
 node --max-old-space-size=6000 tools/step_to_glb.mjs "Assembly 1.step" transit.glb 8
