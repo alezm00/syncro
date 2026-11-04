@@ -9,7 +9,7 @@ Apri `index.html` nel browser (serve internet per three.js, jsPDF e Tailwind da 
 - Moduli = coppia di fianchi (KSI) con ripiani, cassetti, vasche, cassettiere estraibili/ribaltabili/laterali e pannelli di chiusura a passi di 36 mm.
 - Codici controllati sulle tabelle del catalogo (`catalog.js`): se la combinazione non esiste compare un avviso.
 - Controllo collisioni, ingombro del passaruota (sagoma misurata sul modello 3D), porta scorrevole e corridoio minimo (600 mm, ipotesi).
-- Modello di allestimento pronto per manutentori di caldaie, climatizzatori e impianti elettrici (menu in cima ai Moduli), attrezzatura personale (bombole, recuperatore, ecc.) posizionabile nel vano.
+- 12 modelli di allestimento pronti (caldaie, climatizzazione, elettrico, misto; per L1 e L2) caricabili dal menu in cima ai Moduli, generati da `tools/build_presets.py` con sole combinazioni valide a catalogo; attrezzatura personale (bombole, recuperatore, ecc.) posizionabile nel vano.
 - Evidenziazione al passaggio del mouse nei due sensi (pannello <-> modello 3D); clic sul modello apre il modulo.
 - Annulla / ripeti (Ctrl+Z, Ctrl+Maiusc+Z o Ctrl+Y, e pulsanti sopra il 3D).
 - Scheda Catalogo: ricerca su tutto il catalogo (`catalog-full.js`), aggiunta alla distinta o posizionamento nel vano.
