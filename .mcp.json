@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "syncro": {
+      "command": "node",
+      "args": ["mcp/server.mjs"]
+    }
+  }
+}
